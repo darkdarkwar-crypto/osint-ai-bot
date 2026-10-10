@@ -3,7 +3,6 @@ import logging
 import os
 from aiohttp import web
 from groq import Groq
-from google import genai as gemini_client
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
 from aiogram.types import Message
@@ -14,7 +13,6 @@ from aiogram.enums import ParseMode
 # ====== ПЕРЕМЕННЫЕ ОКРУЖЕНИЯ ======
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 
 # URL твоего сервиса на Render
 WEBHOOK_HOST = "https://osint-ai-bot.onrender.com"
@@ -26,33 +24,12 @@ PORT = int(os.environ.get("PORT", 10000))
 
 logging.basicConfig(level=logging.INFO)
 
-# Инициализация двух клиентов
-groq_client = Groq(api_key=GROQ_API_KEY)
-gemini = gemini_client.Client(api_key=GEMINI_API_KEY)
-
+client = Groq(api_key=GROQ_API_KEY)
 bot = Bot(
     token=BOT_TOKEN,
     default=DefaultBotProperties(parse_mode=ParseMode.HTML)
 )
 dp = Dispatcher()
-
-
-def ask_groq(text: str) -> str:
-    """Запрос к Groq"""
-    response = groq_client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
-        messages=[{"role": "user", "content": text}]
-    )
-    return response.choices[0].message.content
-
-
-def ask_gemini(text: str) -> str:
-    """Запрос к Gemini"""
-    response = gemini.models.generate_content(
-        model="gemini-3.5-flash",
-        contents=text
-    )
-    return response.text
 
 
 @dp.message(Command("start"))
@@ -75,38 +52,23 @@ async def cmd_clear(message: Message):
 async def handle_message(message: Message):
     await bot.send_chat_action(message.chat.id, "typing")
 
-    answer = None
-
-    # 1. Пробуем Groq (быстрый и стабильный)
     try:
-        answer = await asyncio.to_thread(ask_groq, message.text)
-        logging.info("Ответ получен от Groq")
-    except Exception as e:
-        logging.warning(f"Groq упал: {e}. Переключаюсь на Gemini...")
+        response = await asyncio.to_thread(
+            client.chat.completions.create,
+            model="llama-3.1-8b-instant",
+            messages=[{"role": "user", "content": message.text}]
+        )
+        answer = response.choices[0].message.content
 
-        # 2. Если Groq упал — идём в Gemini
-        try:
-            answer = await asyncio.to_thread(ask_gemini, message.text)
-            logging.info("Ответ получен от Gemini")
-        except Exception as e2:
-            logging.error(f"Gemini тоже упал: {e2}")
-
-            # 3. Оба упали — пауза и ещё раз Groq
-            await asyncio.sleep(3)
-            try:
-                answer = await asyncio.to_thread(ask_groq, message.text)
-                logging.info("Ответ получен от Groq (со второй попытки)")
-            except Exception as e3:
-                await message.answer("❌ Оба провайдера недоступны. Попробуй через минуту.")
-                return
-
-    # Отправляем ответ
-    if answer:
         if len(answer) > 4000:
             for i in range(0, len(answer), 4000):
                 await message.answer(answer[i:i+4000])
         else:
             await message.answer(answer)
+
+    except Exception as e:
+        logging.error(f"Ошибка Groq: {e}")
+        await message.answer(f"❌ Ошибка: {str(e)[:200]}")
 
 
 async def on_startup(bot: Bot):
