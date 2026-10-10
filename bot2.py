@@ -6,8 +6,9 @@ from aiogram.filters import Command
 from aiogram.types import Message
 
 # ====== ЗАМЕНИ НА СВОИ ДАННЫЕ ======
-BOT_TOKEN = "ТВОЙ_ТОКЕН"
-GEMINI_API_KEY = "ТВОЙ_КЛЮЧ_GEMINI"
+import os
+BOT_TOKEN = os.environ.get("BOT_TOKEN")
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 # ===================================
 
 logging.basicConfig(level=logging.INFO)
