@@ -55,7 +55,7 @@ async def handle_message(message: Message):
     try:
         response = await asyncio.to_thread(
             client.chat.completions.create,
-            model="llama-3.1-8b-instant",
+            model="openai/gpt-oss-20b",
             messages=[{"role": "user", "content": message.text}]
         )
         answer = response.choices[0].message.content
